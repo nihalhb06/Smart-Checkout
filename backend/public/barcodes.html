@@ -1,0 +1,51 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Demo barcodes</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jsbarcode/3.11.6/JsBarcode.all.min.js"></script>
+<style>
+  body{font-family:system-ui,sans-serif;margin:0;padding:16px;background:#f4f6fb;color:#1c2333}
+  h1{margin:0 0 4px} p{color:#667085;margin:0 0 16px}
+  .tabs{margin-bottom:14px} .tabs button{font:inherit;padding:8px 14px;border:1px solid #d0d5dd;background:#fff;border-radius:8px;margin-right:8px;cursor:pointer}
+  .tabs button.active{background:#4f46e5;color:#fff;border-color:#4f46e5}
+  .grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:12px}
+  .card{background:#fff;border-radius:12px;padding:12px;text-align:center;border:1px solid #e4e7ec}
+  .card b{display:block;margin-bottom:4px} .card span{color:#667085;font-size:13px} svg{max-width:100%}
+  .where{display:block;color:#4f46e5;font-size:12px;margin-top:2px}
+</style>
+</head>
+<body>
+<h1>Demo barcodes</h1>
+<p>Open this page on a computer screen and scan the barcodes with the app. Each shop stocks a different set at different prices.</p>
+<div class="tabs" id="tabs"></div>
+<div class="grid" id="grid"></div>
+<script>
+let shops = [];
+fetch('/api/demo/catalogue').then(r => r.json()).then(d => {
+  shops = d.shops;
+  const tabs = document.getElementById('tabs');
+  shops.forEach((s, i) => {
+    const b = document.createElement('button'); b.textContent = (s.icon ? s.icon + ' ' : '') + s.name;
+    b.onclick = () => show(i); tabs.appendChild(b);
+  });
+  show(0);
+});
+function show(i) {
+  document.querySelectorAll('#tabs button').forEach((b, j) => b.classList.toggle('active', i === j));
+  const grid = document.getElementById('grid'); grid.innerHTML = '';
+  shops[i].products.forEach(p => {
+    const c = document.createElement('div'); c.className = 'card';
+    const b = document.createElement('b'); b.textContent = p.name;
+    const s = document.createElement('span'); s.textContent = '₹' + (p.priceCents / 100).toFixed(2);
+    const w = document.createElement('span'); w.className = 'where';
+    w.textContent = [p.aisle, p.shelf].filter(Boolean).join(' · ') + (p.section ? ' — ' + p.section : '');
+    const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+    c.append(b, s, w, svg); grid.appendChild(c);
+    JsBarcode(svg, p.barcode, { format: 'EAN13', height: 60, fontSize: 14, margin: 6 });
+  });
+}
+</script>
+</body>
+</html>

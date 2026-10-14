@@ -1,0 +1,5 @@
+node_modules/
+backend/data/
+mobile/.expo/
+mobile/dist/
+*.log

@@ -1,0 +1,216 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Staff e-bills</title>
+<style>
+  :root{--bg:#f4f6fb;--card:#fff;--ink:#1c2333;--muted:#667085;--line:#e4e7ec;--brand:#4f46e5;--ok:#1a9d58;--warn:#d97706}
+  *{box-sizing:border-box} body{margin:0;font-family:system-ui,-apple-system,Segoe UI,Roboto,sans-serif;background:var(--bg);color:var(--ink)}
+  header{display:flex;align-items:center;gap:12px;padding:14px 20px;background:var(--card);border-bottom:1px solid var(--line)}
+  header h1{font-size:18px;margin:0;flex:1} .pill{font-size:12px;padding:4px 10px;border-radius:999px;background:#eef0ff;color:#3730a3}
+  .live{background:#e6f7ee;color:var(--ok)} .live.off{background:#fdecea;color:#c0392b}
+  button{font:inherit;cursor:pointer;border:1px solid var(--line);background:var(--card);padding:8px 14px;border-radius:8px}
+  button.primary{background:var(--brand);color:#fff;border-color:var(--brand)} button:disabled{opacity:.5}
+  #login{max-width:340px;margin:12vh auto;background:var(--card);padding:28px;border-radius:14px;box-shadow:0 4px 24px rgba(20,30,60,.08)}
+  #login h2{margin-top:0} input,textarea{width:100%;font:inherit;padding:10px;border:1px solid var(--line);border-radius:8px;margin:6px 0 12px}
+  .err{color:#c0392b;min-height:18px;font-size:14px}
+  #app{display:none;max-width:1200px;margin:0 auto;padding:16px}
+  .stats{display:flex;gap:12px;flex-wrap:wrap;margin-bottom:14px}
+  .stat{flex:1;min-width:140px;background:var(--card);border-radius:12px;padding:14px 16px;border:1px solid var(--line)}
+  .stat b{display:block;font-size:24px;margin-top:2px} .stat span{color:var(--muted);font-size:13px}
+  .layout{display:grid;grid-template-columns:minmax(300px,420px) 1fr;gap:14px;align-items:start}
+  @media(max-width:800px){.layout{grid-template-columns:1fr}}
+  .panel{background:var(--card);border:1px solid var(--line);border-radius:12px;overflow:hidden}
+  .tools{display:flex;gap:8px;padding:10px;border-bottom:1px solid var(--line);flex-wrap:wrap}
+  .tools input{margin:0;flex:1;min-width:120px} .tabs button.active{background:var(--brand);color:#fff;border-color:var(--brand)}
+  #list{max-height:68vh;overflow:auto}
+  .row{padding:12px 14px;border-bottom:1px solid var(--line);cursor:pointer;display:flex;gap:10px;align-items:center}
+  .row:hover,.row.sel{background:#f5f6ff} .row.new{animation:flash 2.5s}
+  @keyframes flash{from{background:#fff3c4}to{background:transparent}}
+  .row .main{flex:1;min-width:0} .code{font-family:ui-monospace,Consolas,monospace;font-weight:600;font-size:13px}
+  .sub{color:var(--muted);font-size:12px;margin-top:2px} .amt{font-weight:600}
+  .badge{font-size:11px;padding:3px 8px;border-radius:999px;background:#fff1da;color:var(--warn)} .badge.ok{background:#e6f7ee;color:var(--ok)}
+  #detail{padding:18px} #detail .empty{color:var(--muted);text-align:center;padding:60px 0}
+  table{width:100%;border-collapse:collapse;margin:12px 0} th,td{padding:8px 6px;text-align:left;border-bottom:1px solid var(--line);font-size:14px}
+  th{color:var(--muted);font-weight:500;font-size:12px} td.n,th.n{text-align:right}
+  .total{display:flex;justify-content:space-between;font-size:18px;font-weight:700;padding:8px 6px}
+  .meta{display:grid;grid-template-columns:auto 1fr;gap:4px 14px;font-size:14px} .meta dt{color:var(--muted)} .meta dd{margin:0}
+  .warn{background:#fff7e0;border:1px solid #f3dc9a;border-radius:8px;padding:10px;font-size:13px;margin-top:12px}
+  .empty-list{padding:30px;text-align:center;color:var(--muted)}
+</style>
+</head>
+<body>
+<header>
+  <h1 id="title">Staff e-bills</h1>
+  <span id="conn" class="pill live off" style="display:none">offline</span>
+  <button id="logout" style="display:none">Log out</button>
+</header>
+
+<form id="login">
+  <h2>Staff login</h2>
+  <label>Email<input id="email" type="email" required autocomplete="username" value="staff@freshmart.com"></label>
+  <label>Password<input id="password" type="password" required autocomplete="current-password" value="staff123"></label>
+  <div class="err" id="loginErr"></div>
+  <button class="primary" style="width:100%">Log in</button>
+</form>
+
+<div id="app">
+  <div class="stats">
+    <div class="stat"><span>Bills paid</span><b id="sTotal">0</b></div>
+    <div class="stat"><span>Awaiting review</span><b id="sPending">0</b></div>
+    <div class="stat"><span>Revenue</span><b id="sRevenue">0</b></div>
+  </div>
+  <div class="layout">
+    <div class="panel">
+      <div class="tools">
+        <input id="search" placeholder="Search bill ID or customer">
+        <div class="tabs" id="tabs">
+          <button data-s="all" class="active">All</button>
+          <button data-s="pending">Pending</button>
+          <button data-s="reviewed">Reviewed</button>
+        </div>
+      </div>
+      <div id="list"></div>
+    </div>
+    <div class="panel"><div id="detail"><div class="empty">Select a bill to review it</div></div></div>
+  </div>
+</div>
+
+<script>
+const $ = (id) => document.getElementById(id);
+const money = (c) => '₹' + (c / 100).toFixed(2);
+const fmt = (iso) => new Date(iso).toLocaleString();
+const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+
+let token = localStorage.getItem('staffToken');
+let status = 'all', selected = null, bills = [], es = null, searchTimer = null;
+
+async function api(path, opts = {}) {
+  const r = await fetch('/api/staff' + path, {
+    ...opts,
+    headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + token },
+    body: opts.body ? JSON.stringify(opts.body) : undefined,
+  });
+  const d = await r.json().catch(() => ({}));
+  if (r.status === 401 || r.status === 403) { logout(); throw new Error(d.error || 'Not allowed'); }
+  if (!r.ok) throw new Error(d.error || 'Request failed');
+  return d;
+}
+
+$('login').addEventListener('submit', async (e) => {
+  e.preventDefault(); $('loginErr').textContent = '';
+  try {
+    const r = await fetch('/api/auth/login', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email: $('email').value, password: $('password').value }),
+    });
+    const d = await r.json();
+    if (!r.ok) throw new Error(d.error);
+    if (d.user.role !== 'staff') throw new Error('This account is not a staff account');
+    token = d.token; localStorage.setItem('staffToken', token); localStorage.setItem('staffName', d.user.name);
+    start();
+  } catch (err) { $('loginErr').textContent = err.message; }
+});
+
+function logout() {
+  token = null; localStorage.removeItem('staffToken'); if (es) es.close();
+  $('app').style.display = 'none'; $('login').style.display = 'block';
+  $('logout').style.display = 'none'; $('conn').style.display = 'none';
+}
+$('logout').onclick = logout;
+
+function start() {
+  $('login').style.display = 'none'; $('app').style.display = 'block';
+  $('logout').style.display = 'inline-block'; $('conn').style.display = 'inline-block';
+  $('title').textContent = 'E-bills — ' + (localStorage.getItem('staffName') || 'Staff');
+  load().then(connect).catch(() => {});
+}
+
+async function load() {
+  const q = encodeURIComponent($('search').value.trim());
+  const d = await api(`/bills?status=${status}&q=${q}`);
+  bills = d.bills; renderStats(d.stats); renderList();
+  if (selected) { const b = bills.find((x) => x.code === selected); if (b) renderDetail(b); }
+}
+
+function renderStats(s) {
+  $('sTotal').textContent = s.total; $('sPending').textContent = s.pending; $('sRevenue').textContent = money(s.revenueCents);
+}
+
+function renderList(newCode) {
+  const el = $('list');
+  if (!bills.length) { el.innerHTML = '<div class="empty-list">No bills yet. They appear here the moment a customer pays.</div>'; return; }
+  el.innerHTML = bills.map((b) => `
+    <div class="row ${b.code === selected ? 'sel' : ''} ${b.code === newCode ? 'new' : ''}" data-code="${esc(b.code)}">
+      <div class="main"><div class="code">${esc(b.code)}</div>
+        <div class="sub">${esc(b.customer.name)} · ${b.itemCount} item${b.itemCount === 1 ? '' : 's'} · ${esc(fmt(b.paidAt))}</div></div>
+      <div style="text-align:right"><div class="amt">${money(b.totalCents)}</div>
+        <span class="badge ${b.reviewed ? 'ok' : ''}">${b.reviewed ? 'Reviewed' : 'Pending'}</span>
+        ${b.paymentMethod === 'upi' ? '<span class="badge" style="background:#eef0ff;color:#3730a3">UPI</span>' : ''}</div>
+    </div>`).join('');
+  el.querySelectorAll('.row').forEach((r) => (r.onclick = () => select(r.dataset.code)));
+}
+
+function select(code) {
+  selected = code; renderList(); renderDetail(bills.find((b) => b.code === code));
+}
+
+function renderDetail(b) {
+  if (!b) return;
+  $('detail').innerHTML = `
+    <div class="code" style="font-size:20px">${esc(b.code)}</div>
+    <dl class="meta" style="margin-top:10px">
+      <dt>Customer</dt><dd>${esc(b.customer.name)} (${esc(b.customer.email)})</dd>
+      <dt>Paid at</dt><dd>${esc(fmt(b.paidAt))}</dd>
+      <dt>Payment</dt><dd>${b.paymentMethod === 'upi' ? 'UPI (not verified automatically)' : 'Card'}</dd>
+      <dt>Status</dt><dd>${b.reviewed ? `Reviewed by ${esc(b.reviewedBy || 'staff')} on ${esc(fmt(b.reviewedAt))}` : 'Awaiting review'}</dd>
+      ${b.reviewNote ? `<dt>Note</dt><dd>${esc(b.reviewNote)}</dd>` : ''}
+    </dl>
+    ${b.paymentMethod === 'upi' && !b.reviewed ? '<div class="warn">UPI payments are not verified automatically. Check your UPI / bank app for a payment of the bill total with the note �bill ${esc(b.code)}�, then mark the bill as reviewed.</div>' : ''}
+    <table><thead><tr><th>Item</th><th>Barcode</th><th class="n">Qty</th><th class="n">Price</th><th class="n">Total</th></tr></thead>
+    <tbody>${b.items.map((i) => `<tr><td>${esc(i.name)}</td><td class="code">${esc(i.barcode)}</td><td class="n">${i.quantity}</td><td class="n">${money(i.priceCents)}</td><td class="n">${money(i.lineTotalCents)}</td></tr>`).join('')}</tbody></table>
+    <div class="total"><span>Total paid</span><span>${money(b.totalCents)}</span></div>
+    ${b.reviewed ? '' : `<textarea id="note" rows="2" placeholder="Optional review note"></textarea>
+    <button class="primary" id="reviewBtn">Mark as reviewed</button>`}`;
+  const btn = $('reviewBtn');
+  if (btn) btn.onclick = async () => {
+    btn.disabled = true;
+    try { await api(`/bills/${encodeURIComponent(b.code)}/review`, { method: 'POST', body: { note: $('note').value } }); await load(); }
+    catch (e) { alert(e.message); btn.disabled = false; }
+  };
+}
+
+function connect() {
+  if (es) es.close();
+  es = new EventSource('/api/staff/stream?token=' + encodeURIComponent(token));
+  const conn = $('conn');
+  es.addEventListener('ready', () => { conn.textContent = 'live'; conn.classList.remove('off'); });
+  es.onerror = () => { conn.textContent = 'reconnecting'; conn.classList.add('off'); };
+  es.addEventListener('bill', async (ev) => {
+    const b = JSON.parse(ev.data);
+    await load();
+    renderList(b.code);
+    try { new (window.AudioContext || window.webkitAudioContext)().resume(); beep(); } catch {}
+  });
+}
+
+function beep() {
+  const ctx = new (window.AudioContext || window.webkitAudioContext)();
+  const o = ctx.createOscillator(), g = ctx.createGain();
+  o.connect(g); g.connect(ctx.destination); o.frequency.value = 880; g.gain.value = 0.05;
+  o.start(); o.stop(ctx.currentTime + 0.15);
+}
+
+$('tabs').addEventListener('click', (e) => {
+  if (!e.target.dataset.s) return;
+  status = e.target.dataset.s;
+  document.querySelectorAll('#tabs button').forEach((b) => b.classList.toggle('active', b === e.target));
+  load();
+});
+$('search').addEventListener('input', () => { clearTimeout(searchTimer); searchTimer = setTimeout(load, 250); });
+
+if (token) start();
+</script>
+</body>
+</html>

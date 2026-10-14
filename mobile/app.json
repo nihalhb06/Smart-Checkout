@@ -1,0 +1,28 @@
+{
+  "expo": {
+    "name": "Smart Checkout",
+    "slug": "smart-checkout",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "userInterfaceStyle": "light",
+    "plugins": [
+      [
+        "expo-camera",
+        {
+          "cameraPermission": "Smart Checkout uses the camera to scan product barcodes."
+        }
+      ],
+      "expo-status-bar"
+    ],
+    "ios": {
+      "supportsTablet": false,
+      "bundleIdentifier": "com.smartcheckout.app"
+    },
+    "android": {
+      "package": "com.smartcheckout.app",
+      "permissions": [
+        "CAMERA"
+      ]
+    }
+  }
+}
